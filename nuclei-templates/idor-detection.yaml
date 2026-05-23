@@ -1,0 +1,295 @@
+id: idor-vulnerability-detection
+info:
+  name: IDOR (Insecure Direct Object Reference) Detection
+  author: Security Research Team
+  severity: high
+  description: |
+    Detects potential IDOR vulnerabilities by testing parameter manipulation
+    in API endpoints. IDOR occurs when user-controlled input is used as a 
+    direct reference to access objects without proper authorization checks.
+  reference:
+    - https://owasp.org/www-community/attacks/Insecure_Direct_Object_References
+  tags:
+    - idor
+    - access-control
+    - privilege-escalation
+
+variables:
+  user_id_1: "1"
+  user_id_2: "2"
+  product_id_1: "100"
+  product_id_2: "101"
+
+requests:
+  # Test 1: IDOR in User Profile Endpoint
+  - raw:
+      - |
+        GET /api/users/{{user_id_1}}/profile HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+    
+    matchers:
+      - type: status
+        status:
+          - 200
+      
+      - type: word
+        part: body
+        words:
+          - "user"
+          - "id"
+          - "email"
+        condition: and
+    
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"id":"?([0-9]+)"?'
+        name: user_id
+
+  # Test 2: IDOR in Order/Product Access
+  - raw:
+      - |
+        GET /api/orders/{{product_id_1}} HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+    
+    matchers:
+      - type: status
+        status:
+          - 200
+      
+      - type: word
+        part: body
+        words:
+          - "order"
+          - "product"
+          - "price"
+
+  # Test 3: IDOR via Direct ID Manipulation in Path
+  - raw:
+      - |
+        GET /api/v1/documents/{{user_id_1}}/download HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+    
+    matchers-condition: or
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 206
+      
+      - type: word
+        part: headers
+        words:
+          - "Content-Disposition"
+          - "application/pdf"
+          - "application/zip"
+
+  # Test 4: IDOR in Query Parameters
+  - raw:
+      - |
+        GET /api/user-data?user_id={{user_id_1}}&type=profile HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+    
+    matchers:
+      - type: status
+        status:
+          - 200
+      
+      - type: word
+        part: body
+        words:
+          - "success"
+          - "true"
+        negative: false
+
+  # Test 5: IDOR in POST Request Body
+  - raw:
+      - |
+        POST /api/get-invoice HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "invoice_id": "{{product_id_1}}",
+          "user_id": "{{user_id_1}}"
+        }
+    
+    matchers:
+      - type: status
+        status:
+          - 200
+      
+      - type: word
+        part: body
+        words:
+          - "invoice"
+          - "amount"
+          - "date"
+
+  # Test 6: IDOR in File Upload/Management
+  - raw:
+      - |
+        GET /api/files/{{user_id_1}}/list HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+    
+    matchers:
+      - type: status
+        status:
+          - 200
+      
+      - type: regex
+        part: body
+        regex:
+          - '"file(s)?["\']?\s*:\s*\['
+    
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"file_id":"?([0-9a-f-]+)"?'
+        name: file_id
+
+---
+
+id: idor-parameter-comparison
+info:
+  name: IDOR - Parameter Comparison Test
+  author: Security Research Team
+  severity: high
+  description: |
+    Tests IDOR by attempting to access resources of different users
+    by modifying numeric IDs in parameters.
+  tags:
+    - idor
+    - access-control
+
+requests:
+  - raw:
+      - |
+        GET /api/users/1/details HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+  - raw:
+      - |
+        GET /api/users/2/details HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+  - raw:
+      - |
+        GET /api/users/999/details HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+matchers:
+  - type: status
+    status:
+      - 200
+    condition: all
+
+matchers-condition: and
+
+---
+
+id: idor-uuid-enumeration
+info:
+  name: IDOR - UUID Enumeration
+  author: Security Research Team
+  severity: medium
+  description: |
+    Detects IDOR vulnerabilities using UUID parameter manipulation.
+    Tests if sequential or predictable UUIDs can be enumerated.
+  tags:
+    - idor
+    - enumeration
+
+requests:
+  - raw:
+      - |
+        GET /api/v1/resources/00000000-0000-0000-0000-000000000001 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+  - raw:
+      - |
+        GET /api/v1/resources/00000000-0000-0000-0000-000000000002 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+matchers:
+  - type: status
+    status:
+      - 200
+      - 403
+      - 404
+    condition: or
+
+extractors:
+  - type: regex
+    part: body
+    regex:
+      - '"id":"([a-f0-9\-]{36})"'
+    name: resource_id
+
+---
+
+id: idor-response-comparison
+info:
+  name: IDOR - Response Differentiation
+  author: Security Research Team
+  severity: high
+  description: |
+    Detects IDOR by comparing responses when accessing different user IDs.
+    A successful IDOR vulnerability typically returns different user data
+    for different IDs instead of 403/404.
+  tags:
+    - idor
+    - access-control
+
+requests:
+  - raw:
+      - |
+        GET /api/profile/{{user_id_1}} HTTP/1.1
+        Host: {{Hostname}}
+        User-Agent: Mozilla/5.0
+        Accept: application/json
+      - |
+        GET /api/profile/{{user_id_2}} HTTP/1.1
+        Host: {{Hostname}}
+        User-Agent: Mozilla/5.0
+        Accept: application/json
+
+matchers:
+  - type: status
+    status:
+      - 200
+
+matchers-condition: and
+
+extractors:
+  - type: regex
+    part: body
+    group: 1
+    regex:
+      - '"email":"([^"]+)"'
+      - '"name":"([^"]+)"'
+      - '"username":"([^"]+)"'
+    name: user_info
