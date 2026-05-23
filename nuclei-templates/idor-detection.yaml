@@ -1,441 +1,227 @@
-id: idor-vulnerability-detection
+id: idor-basic-detection
 info:
-  name: IDOR (Insecure Direct Object Reference) Detection
+  name: IDOR Basic Detection
   author: Security Research Team
   severity: high
-  description: |
-    Detects potential IDOR vulnerabilities by testing parameter manipulation
-    in API endpoints. IDOR occurs when user-controlled input is used as a 
-    direct reference to access objects without proper authorization checks.
-  reference:
-    - https://owasp.org/www-community/attacks/Insecure_Direct_Object_References
   tags:
     - idor
     - access-control
-    - privilege-escalation
-
-variables:
-  user_id_1: "1"
-  user_id_2: "2"
-  product_id_1: "100"
-  product_id_2: "101"
 
 requests:
-  - raw:
-      - |
-        GET /api/users/1/profile HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-    
-    matchers:
-      - type: status
-        status:
-          - 200
-      
-      - type: word
-        part: body
-        words:
-          - "user"
-          - "id"
-        condition: or
+  - method: GET
+    path:
+      - /api/users/1/profile
+      - /api/orders/1
+      - /api/documents/1
+      - /api/profile/1
+      - /users/1
+      - /api/user/1
+      - /api/accounts/1
+      - /api/resource/1
 
-  - raw:
-      - |
-        GET /api/orders/1 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-    
     matchers:
       - type: status
         status:
           - 200
 
-  - raw:
-      - |
-        GET /api/v1/documents/1/download HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-    
+---
+
+id: idor-query-parameter
+info:
+  name: IDOR Query Parameter Test
+  author: Security Research Team
+  severity: high
+  tags:
+    - idor
+    - query-param
+
+requests:
+  - method: GET
+    path:
+      - /api/user?id=1
+      - /api/user-data?user_id=1
+      - /api/get-data?id=1
+      - /api/resource?id=1
+      - /data?user_id=1
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+---
+
+id: idor-post-request
+info:
+  name: IDOR POST Request Test
+  author: Security Research Team
+  severity: high
+  tags:
+    - idor
+    - post-method
+
+requests:
+  - method: POST
+    path: /api/get-data
+    headers:
+      Content-Type: application/json
+    body: '{"user_id": 1}'
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 201
+
+  - method: POST
+    path: /api/fetch
+    headers:
+      Content-Type: application/json
+    body: '{"id": 1}'
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 201
+
+  - method: POST
+    path: /api/resource
+    headers:
+      Content-Type: application/json
+    body: '{"owner_id": 1, "action": "view"}'
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 201
+
+---
+
+id: idor-header-bypass
+info:
+  name: IDOR Header Bypass Test
+  author: Security Research Team
+  severity: high
+  tags:
+    - idor
+    - header-bypass
+
+requests:
+  - method: GET
+    path: /api/profile
+    headers:
+      X-User-ID: "1"
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path: /api/profile
+    headers:
+      User-Id: "2"
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path: /api/user-profile
+    headers:
+      X-Forwarded-User: "1"
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path: /api/account
+    headers:
+      X-Original-User: admin
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+---
+
+id: idor-uuid-test
+info:
+  name: IDOR UUID Enumeration
+  author: Security Research Team
+  severity: medium
+  tags:
+    - idor
+    - uuid
+
+requests:
+  - method: GET
+    path:
+      - /api/resources/00000000-0000-0000-0000-000000000001
+      - /api/resources/00000000-0000-0000-0000-000000000002
+      - /api/v1/resources/00000000-0000-0000-0000-000000000001
+
     matchers:
       - type: status
         status:
           - 200
           - 206
 
-  - raw:
-      - |
-        GET /api/user-data?user_id=1&type=profile HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-    
-    matchers:
-      - type: status
-        status:
-          - 200
-
-  - raw:
-      - |
-        POST /api/get-invoice HTTP/1.1
-        Host: {{Hostname}}
-        Content-Type: application/json
-        
-        {
-          "invoice_id": "100",
-          "user_id": "1"
-        }
-    
-    matchers:
-      - type: status
-        status:
-          - 200
-
-  - raw:
-      - |
-        GET /api/files/1/list HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-    
-    matchers:
-      - type: status
-        status:
-          - 200
-
 ---
 
-id: idor-uuid-enumeration
+id: idor-path-traversal
 info:
-  name: IDOR - UUID Enumeration
-  author: Security Research Team
-  severity: medium
-  description: |
-    Detects IDOR vulnerabilities using UUID parameter manipulation.
-    Tests if sequential or predictable UUIDs can be enumerated.
-  tags:
-    - idor
-    - enumeration
-
-requests:
-  - raw:
-      - |
-        GET /api/v1/resources/00000000-0000-0000-0000-000000000001 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/v1/resources/00000000-0000-0000-0000-000000000002 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-matchers:
-  - type: status
-    status:
-      - 200
-      - 206
-
----
-
-id: idor-response-differentiation
-info:
-  name: IDOR - Response Differentiation
+  name: IDOR with Path Traversal
   author: Security Research Team
   severity: high
-  description: |
-    Detects IDOR by comparing responses when accessing different user IDs.
-    A successful IDOR vulnerability typically returns different user data
-    for different IDs instead of 403/404.
-  tags:
-    - idor
-    - access-control
-
-requests:
-  - raw:
-      - |
-        GET /api/profile/1 HTTP/1.1
-        Host: {{Hostname}}
-        User-Agent: Mozilla/5.0
-        Accept: application/json
-      - |
-        GET /api/profile/2 HTTP/1.1
-        Host: {{Hostname}}
-        User-Agent: Mozilla/5.0
-        Accept: application/json
-
-matchers:
-  - type: status
-    status:
-      - 200
-
----
-
-id: idor-api-enumeration
-info:
-  name: IDOR - Common API Endpoint Enumeration
-  author: Security Research Team
-  severity: high
-  description: |
-    Tests common IDOR vulnerable endpoints dengan berbagai parameter formats.
-  tags:
-    - idor
-    - api
-    - enumeration
-
-requests:
-  - raw:
-      - |
-        GET /users/1 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/user/1 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/accounts/1 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/profile/1/details HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/user?id=1 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /data/1 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /resource/1 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-matchers:
-  - type: status
-    status:
-      - 200
-      - 202
-      - 206
-
----
-
-id: idor-header-manipulation
-info:
-  name: IDOR - Header Manipulation Test
-  author: Security Research Team
-  severity: high
-  description: |
-    Tests IDOR vulnerabilities yang mungkin dapat dibypass menggunakan
-    header manipulation atau user context override.
-  tags:
-    - idor
-    - header-bypass
-
-requests:
-  - raw:
-      - |
-        GET /api/profile HTTP/1.1
-        Host: {{Hostname}}
-        X-User-ID: 1
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/profile HTTP/1.1
-        Host: {{Hostname}}
-        User-Id: 2
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/user-profile HTTP/1.1
-        Host: {{Hostname}}
-        X-Forwarded-User: 1
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/account HTTP/1.1
-        Host: {{Hostname}}
-        X-Original-User: admin
-        Accept: application/json
-
-matchers:
-  - type: status
-    status:
-      - 200
-      - 202
-
----
-
-id: idor-post-request-manipulation
-info:
-  name: IDOR - POST Request Body Manipulation
-  author: Security Research Team
-  severity: high
-  description: |
-    Tests IDOR di POST requests dengan manipulation body parameters.
-  tags:
-    - idor
-    - post-method
-
-requests:
-  - raw:
-      - |
-        POST /api/get-data HTTP/1.1
-        Host: {{Hostname}}
-        Content-Type: application/json
-        
-        {
-          "user_id": 1
-        }
-
-  - raw:
-      - |
-        POST /api/fetch HTTP/1.1
-        Host: {{Hostname}}
-        Content-Type: application/json
-        
-        {
-          "id": 1
-        }
-
-  - raw:
-      - |
-        POST /api/resource HTTP/1.1
-        Host: {{Hostname}}
-        Content-Type: application/json
-        
-        {
-          "owner_id": 1,
-          "action": "view"
-        }
-
-  - raw:
-      - |
-        POST /data/retrieve HTTP/1.1
-        Host: {{Hostname}}
-        Content-Type: application/x-www-form-urlencoded
-        
-        user_id=1&type=profile
-
-matchers:
-  - type: status
-    status:
-      - 200
-      - 201
-
----
-
-id: idor-path-traversal-combination
-info:
-  name: IDOR - Path Traversal Combination
-  author: Security Research Team
-  severity: high
-  description: |
-    Tests IDOR combined dengan path traversal attempts.
   tags:
     - idor
     - path-traversal
 
 requests:
-  - raw:
-      - |
-        GET /api/users/1/files HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
+  - method: GET
+    path:
+      - /api/users/1/files
+      - /api/users/1/../2/files
+      - /api/users/1%252f..%252f2/files
+      - /API/USERS/1/FILES
 
-  - raw:
-      - |
-        GET /api/users/1/../2/files HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/users/1%252f..%252f2/files HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /API/USERS/1/FILES HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-matchers:
-  - type: status
-    status:
-      - 200
-      - 202
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 202
 
 ---
 
-id: idor-horizontal-privilege-escalation
+id: idor-privilege-escalation
 info:
-  name: IDOR - Horizontal Privilege Escalation
+  name: IDOR Horizontal Privilege Escalation
   author: Security Research Team
   severity: high
-  description: |
-    Tests horizontal privilege escalation melalui IDOR.
-    Mencoba mengakses resource user lain pada level yang sama.
   tags:
     - idor
     - privilege-escalation
 
 requests:
-  - raw:
-      - |
-        GET /api/profile/admin HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
+  - method: GET
+    path:
+      - /api/profile/admin
+      - /api/profile/root
+      - /api/profile/test
+      - /api/users/0
+      - /api/users/1
+      - /api/users/999999
 
-  - raw:
-      - |
-        GET /api/profile/root HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/profile/test HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/users/0 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/users/1 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-  - raw:
-      - |
-        GET /api/users/999999 HTTP/1.1
-        Host: {{Hostname}}
-        Accept: application/json
-
-matchers:
-  - type: status
-    status:
-      - 200
-      - 202
-      - 206
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 202
+          - 206
