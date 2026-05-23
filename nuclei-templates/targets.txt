@@ -1,0 +1,16 @@
+# Nuclei IDOR Detection - Target List Template
+# Add your target URLs here, one per line
+
+# API Endpoints
+https://api.example.com
+https://api.example.com/v1
+https://api.example.com/v2
+https://api.staging.example.com
+
+# Web Application URLs
+https://example.com
+https://app.example.com
+
+# Add your targets below:
+# https://yourtarget.com
+# https://yourtarget.com/api
