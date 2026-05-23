@@ -1,0 +1,343 @@
+id: idor-numeric-id-enumeration
+info:
+  name: IDOR - Numeric ID Enumeration
+  author: Security Research Team
+  severity: high
+  description: |
+    Detects IDOR vulnerabilities through numeric ID enumeration.
+    Tests if sequential numeric IDs allow unauthorized access to resources.
+  reference:
+    - https://owasp.org/www-community/attacks/Insecure_Direct_Object_References
+  tags:
+    - idor
+    - enumeration
+    - access-control
+
+requests:
+  # Test different user IDs sequentially
+  - raw:
+      - |
+        GET /api/users/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/users/2 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/users/3 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/users/10 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/users/100 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+        condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"id":([0-9]+)'
+          - '"username":"([^"]+)"'
+          - '"email":"([^"]+)"'
+        name: user_data
+
+---
+
+id: idor-order-enumeration
+info:
+  name: IDOR - Order/Transaction ID Enumeration
+  author: Security Research Team
+  severity: high
+  description: |
+    Tests IDOR in order/transaction endpoints by enumerating order IDs.
+  tags:
+    - idor
+    - enumeration
+    - orders
+
+requests:
+  - raw:
+      - |
+        GET /api/orders/1001 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/orders/1002 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/orders/1003 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/transactions/5000 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/transactions/5001 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+    matchers-condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"order_id":([0-9]+)'
+          - '"amount":"?([0-9.]+)"?'
+          - '"status":"([^"]+)"'
+        name: order_info
+
+---
+
+id: idor-resource-id-enumeration
+info:
+  name: IDOR - Resource ID Enumeration (UUID/String)
+  author: Security Research Team
+  severity: high
+  description: |
+    Detects IDOR by enumerating predictable resource identifiers.
+    Tests UUID patterns and sequential string IDs.
+  tags:
+    - idor
+    - enumeration
+    - uuid
+
+requests:
+  # Test sequential UUID patterns
+  - raw:
+      - |
+        GET /api/resources/00000000-0000-0000-0000-000000000001 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/resources/00000000-0000-0000-0000-000000000002 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/resources/11111111-1111-1111-1111-111111111111 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 403
+          - 401
+
+    matchers-condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"id":"([a-f0-9\-]{36})"'
+          - '"resource_id":"([^"]+)"'
+        name: resource_id
+
+---
+
+id: idor-document-enumeration
+info:
+  name: IDOR - Document/File ID Enumeration
+  author: Security Research Team
+  severity: high
+  description: |
+    Tests IDOR in document/file download endpoints.
+    Attempts to access documents by enumerating document IDs.
+  tags:
+    - idor
+    - documents
+    - enumeration
+
+requests:
+  - raw:
+      - |
+        GET /api/documents/1/download HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+      - |
+        GET /api/documents/2/download HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+      - |
+        GET /api/documents/100/download HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+      - |
+        GET /api/files/doc-001 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/files/doc-002 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers-condition: or
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 206
+
+      - type: word
+        part: headers
+        words:
+          - "Content-Disposition"
+          - "attachment"
+          - "application/pdf"
+          - "application/zip"
+
+    extractors:
+      - type: regex
+        part: headers
+        regex:
+          - 'filename="?([^"]+)"?'
+        name: filename
+
+---
+
+id: idor-api-key-enumeration
+info:
+  name: IDOR - API Key/Token ID Enumeration
+  author: Security Research Team
+  severity: critical
+  description: |
+    Tests IDOR in API key/token management endpoints.
+    Attempts to enumerate and access other users' API keys.
+  tags:
+    - idor
+    - api-keys
+    - critical
+
+requests:
+  - raw:
+      - |
+        GET /api/v1/api-keys HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/v1/api-keys/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/v1/api-keys/2 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/user/tokens HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+    matchers-condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"api_key":"([^"]+)"'
+          - '"token":"([^"]+)"'
+          - '"secret":"([^"]+)"'
+        name: sensitive_data
+
+---
+
+id: idor-profile-enumeration
+info:
+  name: IDOR - User Profile Enumeration
+  author: Security Research Team
+  severity: high
+  description: |
+    Detects IDOR through user profile enumeration.
+    Tests if all user profiles are accessible regardless of authentication context.
+  tags:
+    - idor
+    - profiles
+    - enumeration
+
+requests:
+  - raw:
+      - |
+        GET /profile/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /profile/2 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /profile/999 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /user/profile/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+      - |
+        GET /api/profiles/1 HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer {{auth_token}}
+        Accept: application/json
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+    matchers-condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"full_name":"([^"]+)"'
+          - '"email":"([^"]+)"'
+          - '"phone":"([^"]+)"'
+          - '"address":"([^"]+)"'
+        name: profile_info
